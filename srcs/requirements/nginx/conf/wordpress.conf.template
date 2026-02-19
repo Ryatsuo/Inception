@@ -7,6 +7,7 @@ server {
 
     ssl_certificate     /etc/nginx/ssl/server.crt;
     ssl_certificate_key /etc/nginx/ssl/server.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
 
     client_max_body_size 64M;
 

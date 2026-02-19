@@ -9,7 +9,7 @@ CONF_TARGET=/etc/nginx/sites-available/wordpress.conf
 
 mkdir -p "$SSL_DIR" /etc/nginx/sites-available /etc/nginx/sites-enabled
 
-# Generate self-signed cert if missing
+# Genere un certificat ssl
 if [ ! -f "$SSL_DIR/server.crt" ] || [ ! -f "$SSL_DIR/server.key" ]; then
   echo "[nginx] Generating self-signed certificate for $SERVER_NAME..."
   openssl req -x509 -nodes -newkey rsa:2048 \
