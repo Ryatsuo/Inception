@@ -23,11 +23,7 @@ logs:
 status:
 	@$(COMPOSE_CMD) ps
 
-clean:
-	@echo "$(YELLOW)[clean] Removing containers and networks...$(NC)"
-	$(COMPOSE_CMD) down
-
-fclean: clean
+fclean: down
 	@echo "$(YELLOW)[fclean] Removing all volumes and data...$(NC)"
 	@sudo rm -rf /home/edobele/data/db/* /home/edobele/data/db/.* 2>/dev/null || true
 	@sudo rm -rf /home/edobele/data/wp/* /home/edobele/data/wp/.* 2>/dev/null || true
@@ -44,11 +40,10 @@ help:
 	@echo "  make down       - Stop and remove all containers"
 	@echo "  make logs       - Show live logs from all services"
 	@echo "  make status     - Show container status"
-	@echo "  make clean      - Remove containers and networks (keep volumes)"
 	@echo "  make fclean     - Remove everything including volumes"
 	@echo "  make re         - Clean rebuild and restart (fclean + build + up)"
 	@echo ""
 
 .DEFAULT_GOAL := help
 
-.PHONY: build up down logs status clean fclean re help
+.PHONY: build up down logs status fclean re help
