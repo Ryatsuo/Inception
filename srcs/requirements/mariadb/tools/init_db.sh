@@ -1,7 +1,10 @@
 #!/bin/bash
+# -e exit si une commande échoue
+# -u exit si une variable d'environnement utilisée n'est pas définie
+# -o pipefail pour que les erreurs dans les pipelines soient prises en compte
 set -euo pipefail
 
-# Validate required environment variables
+# Vérifie que toutes les variables d'environnement nécessaires sont définies
 for var in MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD MYSQL_ROOT_PASSWORD; do
 	if [ -z "${!var:-}" ]; then
 		echo "[mariadb] Error: $var is not set" >&2
@@ -9,25 +12,25 @@ for var in MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD MYSQL_ROOT_PASSWORD; do
 	fi
 done
 
-# Prepare runtime and data directories
+# Crée les dossiers nécessaires au fonctionnement de MariaDB et affecte les droits à l'utilisateur mysql
 mkdir -p /run/mysqld /var/lib/mysql
 chown -R mysql:mysql /run/mysqld /var/lib/mysql
 
-# Initialize system tables on first run
+# Initialise les tables système de MariaDB uniquement au premier démarrage
 if [ ! -d "/var/lib/mysql/mysql" ]; then
 	echo "[mariadb] Initializing system tables..."
 	mariadb-install-db --user=mysql --datadir=/var/lib/mysql >/dev/null 2>&1
 fi
 
-# Check if setup has already been done (root password was set)
+# Configure la base de données une seule fois (le fichier .setup_done sert de marqueur)
 if [ ! -f "/var/lib/mysql/.setup_done" ]; then
 	echo "[mariadb] Starting setup server..."
 	
-	# Start temp server with no grants
+	# Démarre un serveur temporaire sans réseau et sans authentification pour pouvoir exécuter le SQL de setup
 	mysqld --skip-networking --skip-grant-tables --socket=/run/mysqld/mysqld.sock --user=mysql &
 	temp_pid=$!
 	
-	# Wait for startup
+	# Attend que le serveur temporaire soit prêt
 	for i in {1..30}; do
 		if mysqladmin --protocol=socket ping --silent 2>/dev/null; then
 			break
@@ -35,7 +38,7 @@ if [ ! -f "/var/lib/mysql/.setup_done" ]; then
 		sleep 1
 	done
 	
-	# Apply setup SQL
+	# Applique la configuration SQL : mot de passe root, création de la BDD et de l'utilisateur WordPress
 	echo "[mariadb] Configuring database..."
 	mysql --protocol=socket -u root <<EOF
 FLUSH PRIVILEGES;
@@ -46,14 +49,14 @@ GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%';
 FLUSH PRIVILEGES;
 EOF
 	
-	# Mark setup as done
+	# Marque le setup comme terminé pour ne pas le rejouer au prochain démarrage
 	touch /var/lib/mysql/.setup_done
 	
-	# Kill temp server
+	# Arrête le serveur temporaire
 	kill $temp_pid || true
 	sleep 2
 fi
 
-# Run main MariaDB in foreground
+# Lance le vrai serveur MariaDB en premier plan (obligatoire pour que le container reste actif)
 echo "[mariadb] Starting MariaDB..."
 exec mysqld --user=mysql --bind-address=0.0.0.0

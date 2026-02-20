@@ -9,12 +9,15 @@ server {
     ssl_certificate_key /etc/nginx/ssl/server.key;
     ssl_protocols       TLSv1.2 TLSv1.3;
 
+    # Permet d'upload des fichiers de 64M maximum.
     client_max_body_size 64M;
 
+    # Permet a Nginx de donner à WP la tache de trouver les fichiers. (/var/www/html)
     location / {
         try_files $uri $uri/ /index.php?$args;
     }
 
+    # Règle qui gère tous les fichiers PHP et les envoie à WordPress.
     location ~ \.php$ {
         try_files $uri =404;
         include fastcgi_params;
@@ -23,6 +26,7 @@ server {
         fastcgi_pass wordpress:9000;
     }
 
+    # Permet de mettre en cache tout les fichiers statique, pour eviter d'avoir à les re télécharger, le navigateur les sauvegardes.
     location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
         expires max;
         log_not_found off;
