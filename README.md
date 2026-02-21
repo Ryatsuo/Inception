@@ -1,157 +1,95 @@
-*This project has been created as part of the 42 curriculum by edobele.*
+_This project has been created as part of the 42 curriculum by edobele._
 
 # Inception
 
 ## Description
-Inception is a Docker-based stack that runs WordPress behind Nginx with MariaDB. The goal is to build and orchestrate custom images (no prebuilt Docker Hub images) using Docker Compose, with persistent data stored under `/home/edobele/data/`. The project demonstrates containerization basics, service isolation, TLS termination, and data persistence for a simple web app.
+
+Inception is a system administration project from the 42 curriculum. The goal is to build and orchestrate a small production-like web infrastructure entirely from custom Docker images, without using any pre-built service images from Docker Hub. Every service runs in its own dedicated container, wired together by a single `docker-compose.yml`.
+
+The stack exposes a WordPress site served over HTTPS (TLS 1.2/1.3 only) by an Nginx reverse proxy, backed by a MariaDB database. All persistent data lives on the host under `/home/edobele/data/` through Docker bind mounts. Three custom images are built from Debian Bookworm: **Nginx** (reverse proxy, self-signed TLS), **WordPress** (PHP-FPM, bootstrapped via WP-CLI), and **MariaDB** (database, initialised from a custom entrypoint).
+
+The full repository layout, environment variable reference, and detailed container/volume management commands are documented in [DEV_DOC.md](DEV_DOC.md). Instructions for accessing the site, the admin panel, and checking service health are in [USER_DOC.md](USER_DOC.md).
 
 ## Instructions
-### Prerequisites
-- Docker and Docker Compose installed
-- Host folders exist: `/home/edobele/data/db` and `/home/edobele/data/wp`
 
-### Environment variables (`srcs/.env`)
-- Database: `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD`
-- WordPress: `WORDPRESS_DB_NAME`, `WORDPRESS_DB_USER`, `WORDPRESS_DB_PASSWORD`, `WORDPRESS_DB_HOST`, `WP_TITLE`, `WP_ADMIN_USER`, `WP_ADMIN_PASSWORD`, `WP_ADMIN_EMAIL`, `WP_URL`
-- Nginx: `SERVER_NAME`
+> For a complete step-by-step setup guide, see [DEV_DOC.md](DEV_DOC.md).
 
-### Build & Run
-From the project root (Makefile wrappers):
+**Quick start:**
+
+1. Install Docker Engine, Docker Compose v2, and Make.
+2. Create host data directories: `mkdir -p /home/edobele/data/db /home/edobele/data/wp`
+3. Create `srcs/.env` and fill in every variable (see the variable table in [DEV_DOC.md](DEV_DOC.md)).
+4. Build and run: `make up`
+
 ```bash
-make build   # Build images
-make up      # Start stack in background
-make status  # Show container status
-make logs    # Follow logs
-```
-Direct Compose (inside srcs/):
-```bash
-cd srcs
-docker compose build
-docker compose up -d
+make build    # Build images
+make up       # Start the stack
+make status   # Show running containers
+make logs     # Follow live logs
+make down     # Stop and remove containers (data kept)
+make fclean   # Stop + wipe all data volumes
+make re       # Full cold restart (fclean → build → up)
 ```
 
-### Stopping & Cleaning
-```bash
-make down    # Stop and remove containers/network
-make clean   # Same as down, keep volumes
-make fclean  # Remove containers, network, and data under /home/edobele/data/{db,wp}
-make re      # Full rebuild and restart
-```
+Configuration is injected entirely through `srcs/.env` (database credentials, WordPress admin account, site URL, Nginx server name). **Never commit the actual `.env` file.**
 
 ## Project Description
-- **Docker usage:** Three custom images (MariaDB, WordPress PHP-FPM, Nginx) built from `srcs/requirements/*` and orchestrated with a single `docker-compose.yml`. Nginx terminates TLS on 443 and proxies PHP to WordPress on 9000; WordPress connects to MariaDB on 3306; both data and files persist via bind mounts under `/home/edobele/data/`.
-- **Sources layout:**
-  - `srcs/docker-compose.yml` – services, network, volumes
-  - `srcs/requirements/mariadb` – DB image and init script
-  - `srcs/requirements/wordpress` – PHP-FPM image and WP setup script
-  - `srcs/requirements/nginx` – reverse proxy image, TLS self-signed at boot
-  - `srcs/.env` – environment configuration
-- **Main design choices:**
-  - Build everything from Debian Bookworm base images (no prebuilt service images)
-  - Use bind mounts under the mandated host path for persistence
-  - Simple TLS: self-signed certificate generated at container start
-  - WordPress bootstraps itself via WP-CLI; MariaDB initialized via a custom entrypoint
+
+Docker is used to build and orchestrate three custom service containers (Nginx, WordPress PHP-FPM, MariaDB) from Debian Bookworm base images, wired by a user-defined bridge network and persisted through bind mounts. No pre-built service images from Docker Hub are used. Full architecture details, design choices, and the repository layout are described in [DEV_DOC.md](DEV_DOC.md).
 
 ### Comparisons
-- **Virtual Machines vs Docker:** VMs virtualize hardware and need full guest OS; Docker shares the host kernel, yielding lighter resource use, faster startup, and easier layering while still providing process-level isolation.
-- **Secrets vs Environment Variables:** Secrets are preferable for sensitive data (mounted as files, not in env); here, the subject mandates `.env`, so credentials reside in environment variables—acceptable for a local learning stack but weaker than secrets in production.
-- **Docker Network vs Host Network:** A user-defined bridge isolates services with internal DNS names and avoids port conflicts; host networking would expose services directly on the host stack and reduce isolation. We keep bridge for separation and predictable service discovery.
-- **Docker Volumes vs Bind Mounts:** Managed volumes abstract host paths and are portable; bind mounts map explicit host directories for transparency and easy inspection. The subject requires bind mounts under `/home/edobele/data/`, so we use bind mounts for DB and WP data.
+
+#### Virtual Machines vs Docker
+
+A Virtual Machine emulates an entire hardware environment and runs a full guest OS (kernel included) on top of a hypervisor. This gives strong isolation but carries significant overhead: slow boot times, large disk images, and high memory usage per VM.
+
+Docker containers share the host kernel and only package the application's userland. They start in milliseconds, layered images are cached and small, and dozens of containers run comfortably on hardware where only a handful of VMs would fit. The trade-off is a reduced (though still substantial) isolation boundary: a kernel vulnerability can affect all containers.
+
+For this project containers are the right tool — lightweight, reproducible, and trivially composable.
+
+#### Secrets vs Environment Variables
+
+Environment variables are the simplest way to pass configuration into a container: they are set in `.env`, read by Docker Compose, and available to every process in the container. The downside is that they end up in the process environment table, Docker inspect output, and any log that accidentally prints `env` — all of which are visible to anyone with access to the host or the image.
+
+Docker Secrets (or equivalent solutions such as HashiCorp Vault) mount sensitive values as in-memory files inside the container (`/run/secrets/<name>`), never placing them in environment variables. They are encrypted at rest in the Swarm state store and transmitted securely to workers.
+
+The 42 subject mandates the use of an `.env` file, so this project uses environment variables — acceptable for a local learning environment, but **inappropriate for production** where Docker Secrets or a secrets manager should be used instead.
+
+#### Docker Network vs Host Network
+
+With `--network host` a container is not isolated at the network level: it shares the host's network stack, which means it sees all host interfaces and processes on the same port space. This removes NAT overhead and can improve raw throughput, but eliminates name-based service discovery, increases the attack surface, and makes port conflicts easy to create.
+
+User-defined bridge networks (used here) provide a private virtual network for the containers. Each service is reachable under its service name (`mariadb`, `wordpress`, `nginx`) without any `/etc/hosts` hacks. Only explicitly published ports (`443:443` on Nginx) are reachable from the host. This is the standard and recommended approach for multi-container applications.
+
+#### Docker Volumes vs Bind Mounts
+
+|               | Docker Volumes                                  | Bind Mounts                        |
+| ------------- | ----------------------------------------------- | ---------------------------------- |
+| Path location | Managed by Docker in `/var/lib/docker/volumes/` | Any path on the host               |
+| Portability   | High — path is abstracted                       | Low — host path is hardcoded       |
+| Inspection    | Via `docker volume inspect`                     | Directly on the filesystem         |
+| Use case      | Production, portable setups                     | Dev workflows, explicit host paths |
+
+The 42 subject explicitly requires bind mounts under `/home/<login>/data/`, so this project uses bind mounts configured as named volumes with `driver_opts: {type: none, o: bind, device: ...}`. In a real production scenario, managed Docker volumes (or cloud-native storage) would be preferable.
 
 ## Resources
-- Docker Docs: https://docs.docker.com/
-- Docker Compose: https://docs.docker.com/compose/
-- MariaDB Docs: https://mariadb.com/kb/en/
-- WordPress + WP-CLI: https://developer.wordpress.org/cli/commands/
-- Nginx Docs: https://nginx.org/en/docs/
 
-### AI Usage
-- Used AI assistance to draft and refine Docker entrypoint scripts, Nginx/WordPress configs, and this README to ensure compliance with the stated requirements. All outputs were reviewed and adjusted manually to fit the 42 subject constraints (custom images, bind mounts, TLS self-sign, service wiring).
+- Docker Engine documentation — https://docs.docker.com/engine/
+- Docker Compose reference — https://docs.docker.com/compose/compose-file/
+- MariaDB knowledge base — https://mariadb.com/kb/en/
+- WP-CLI command reference — https://developer.wordpress.org/cli/commands/
+- Nginx documentation — https://nginx.org/en/docs/
+- OpenSSL man pages — https://www.openssl.org/docs/manmaster/man1/openssl.html
+- PHP-FPM configuration — https://www.php.net/manual/en/install.fpm.configuration.php
 
-## Quick Usage Example
-```bash
-make up
-curl -kI https://localhost/   # Expect 302 to /wp-admin/install.php on first run
-```
+### AI usage
 
----
-If you need a fresh start: `make fclean && make up`.# Inception
+AI assistance (GitHub Copilot / Claude) was used during this project for the following tasks:
 
-Petit stack auto-hébergée WordPress/MariaDB/Nginx avec Docker Compose, volumes persistants dans `/home/edobele/data/` et images custom (pas d’images DockerHub pré-construites, conformément au sujet 42).
+- Learning and understanding Docker concepts: image layering, container lifecycle, networking, volumes, and Docker Compose orchestration.
+- Drafting and iterating on Nginx TLS configuration and the `wordpress.conf.template`.
+- Debugging the MariaDB init entrypoint script and the WordPress WP-CLI bootstrap sequence.
+- Generating the first pass of this README and restructuring it to meet the requirements.
+- Translating the original README, which was written in French, into English.
 
-## Composition
-- MariaDB (build `requirements/mariadb`) – DB WordPress
-- WordPress PHP-FPM (build `requirements/wordpress`) – application
-- Nginx (build `requirements/nginx`) – reverse proxy HTTPS 443
-- Réseau: bridge `inception`
-- Volumes: `/home/edobele/data/db` (MySQL), `/home/edobele/data/wp` (WordPress fichiers)
-
-## Prérequis
-- Docker + Docker Compose
-- Dossiers de données présents: `/home/edobele/data/db`, `/home/edobele/data/wp`
-
-## Variables d’environnement (fichier `srcs/.env`)
-```
-# DB
-MYSQL_DATABASE=wordpress
-MYSQL_USER=wpuser
-MYSQL_PASSWORD=wp_password
-MYSQL_ROOT_PASSWORD=root_password
-
-# WordPress
-WORDPRESS_DB_NAME=wordpress
-WORDPRESS_DB_USER=wpuser
-WORDPRESS_DB_PASSWORD=wp_password
-WORDPRESS_DB_HOST=mariadb
-WP_TITLE=My WordPress
-WP_ADMIN_USER=admin
-WP_ADMIN_PASSWORD=admin_password
-WP_ADMIN_EMAIL=admin@example.com
-WP_URL=https://localhost
-
-# Nginx
-SERVER_NAME=localhost
-```
-
-## Démarrage rapide
-Depuis `srcs/` (ou via le Makefile à la racine):
-```bash
-cd srcs
-docker compose build
-docker compose up -d
-docker compose logs -f
-```
-Ou avec le Makefile (à la racine):
-```bash
-make up      # build + up si nécessaire
-make status  # état des services
-make logs    # suivre les logs
-```
-
-## Accès
-- Site: https://localhost (certificat auto-signé généré au démarrage)
-- Admin WP après installation: https://localhost/wp-admin
-
-## Persistance
-- Base: `/home/edobele/data/db`
-- Fichiers WP: `/home/edobele/data/wp`
-
-## Cibles Make utiles
-- `make build` : build des images
-- `make up` : démarre les services en détaché
-- `make down` : arrête et supprime conteneurs/réseau
-- `make clean` : idem down (garde les volumes)
-- `make fclean` : supprime aussi les données (`/home/edobele/data/db`, `/home/edobele/data/wp`)
-- `make re` : fclean + build + up
-- `make logs`, `make status`
-
-## Dépannage rapide
-- **WP ne se connecte pas à la DB**: vérifier `WORDPRESS_DB_*` dans `.env` et que MariaDB écoute (make logs). Un restart complet: `make re`.
-- **Certificat TLS**: auto-signé généré au boot; régénéré à chaque clean si fichiers absents.
-- **Permissions volumes**: s’assurer que `/home/edobele/data/db` et `/home/edobele/data/wp` sont accessibles en lecture/écriture pour Docker.
-
-## Conformité sujet 42
-- Images construites depuis `requirements/*`
-- Volumes bindés sous `/home/edobele/data/`
-- Réseau user-defined bridge
-- Port exposé: 443 (Nginx). MariaDB/WordPress restent internes.
+All AI-generated output was reviewed, tested, and adjusted manually to fit the project constraints (custom images, mandatory host paths, subject rules). No AI-written code was committed without understanding and validating it.
