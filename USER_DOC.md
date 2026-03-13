@@ -2,7 +2,7 @@
 
 ## What does this stack provide?
 
-The Inception stack runs three services that together deliver a self-hosted WordPress website:
+The Inception stack runs three services that together deliver a self-hosted WordPress website: 
 
 | Service       | What it does                                                                        | Reachable from outside? |
 | ------------- | ----------------------------------------------------------------------------------- | ----------------------- |

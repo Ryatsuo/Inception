@@ -1,5 +1,5 @@
 services:
-  mariadb:
+  mariadb: 
     build: requirements/mariadb
     image: mariadb
     restart: unless-stopped

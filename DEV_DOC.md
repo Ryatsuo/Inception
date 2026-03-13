@@ -2,7 +2,7 @@
 
 ## Environment setup from scratch
 
-### 1. System prerequisites
+### 1. System prerequisites 
 
 Make sure the following are installed on the host:
 

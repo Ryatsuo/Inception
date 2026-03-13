@@ -2,7 +2,7 @@ _This project has been created as part of the 42 curriculum by edobele._
 
 # Inception
 
-## Description
+## Description 
 
 Inception is a system administration project from the 42 curriculum. The goal is to build and orchestrate a small production-like web infrastructure entirely from custom Docker images, without using any pre-built service images from Docker Hub. Every service runs in its own dedicated container, wired together by a single `docker-compose.yml`.
 

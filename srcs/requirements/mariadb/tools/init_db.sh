@@ -2,7 +2,7 @@
 # -e exit si une commande échoue
 # -u exit si une variable d'environnement utilisée n'est pas définie
 # -o pipefail pour que les erreurs dans les pipelines soient prises en compte
-set -euo pipefail
+set -euo pipefail 
 
 # Vérifie que toutes les variables d'environnement nécessaires sont définies
 for var in MYSQL_DATABASE MYSQL_USER MYSQL_PASSWORD MYSQL_ROOT_PASSWORD; do

@@ -3,7 +3,7 @@ COMPOSE_CMD := docker compose -f $(COMPOSE_FILE)
 
 GREEN := \033[0;32m
 YELLOW := \033[1;33m
-NC := \033[0m
+NC := \033[0m 
 
 build:
 	@echo "$(GREEN)[build] Building Docker images...$(NC)"
